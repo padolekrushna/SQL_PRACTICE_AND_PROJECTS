@@ -1,1 +1,2 @@
-# SQL_Music_Store_Analysis
+# Owner avatar
+SQL_PRACTICE_AND_PROJECTS
