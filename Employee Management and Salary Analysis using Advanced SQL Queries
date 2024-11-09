@@ -1,0 +1,133 @@
+# Import necessary libraries
+import sqlite3
+import pandas as pd
+
+# Create a connection to SQLite in-memory database
+conn = sqlite3.connect(':memory:')
+cursor = conn.cursor()
+
+# Create tables
+cursor.execute('''
+CREATE TABLE employees (
+    employee_id INTEGER PRIMARY KEY,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    department_id INTEGER,
+    hire_date TEXT NOT NULL,
+    gender TEXT,
+    birth_date TEXT,
+    FOREIGN KEY(department_id) REFERENCES departments(department_id)
+)
+''')
+
+cursor.execute('''
+CREATE TABLE departments (
+    department_id INTEGER PRIMARY KEY,
+    department_name TEXT NOT NULL
+)
+''')
+
+cursor.execute('''
+CREATE TABLE salaries (
+    employee_id INTEGER,
+    salary REAL NOT NULL,
+    year INTEGER NOT NULL,
+    FOREIGN KEY(employee_id) REFERENCES employees(employee_id)
+)
+''')
+
+# Insert data into departments table
+departments_data = [
+    (1, 'Sales'),
+    (2, 'HR'),
+    (3, 'Marketing'),
+    (4, 'IT'),
+    (5, 'Finance')
+]
+cursor.executemany('''INSERT INTO departments (department_id, department_name) VALUES (?, ?)''', departments_data)
+
+# Insert expanded data into employees table
+employees_data = [
+    (1, 'John', 'Doe', 1, '2015-03-15', 'M', '1990-06-20'),
+    (2, 'Jane', 'Smith', 2, '2016-07-01', 'F', '1985-12-05'),
+    (3, 'Michael', 'Johnson', 3, '2017-09-23', 'M', '1992-09-15'),
+    (4, 'Emily', 'Davis', 4, '2018-11-12', 'F', '1988-11-23'),
+    (5, 'William', 'Brown', 1, '2019-01-25', 'M', '1995-05-10'),
+    (6, 'Olivia', 'Taylor', 5, '2020-03-10', 'F', '1991-04-18')
+]
+cursor.executemany('''INSERT INTO employees (employee_id, first_name, last_name, department_id, hire_date, gender, birth_date)
+VALUES (?, ?, ?, ?, ?, ?, ?)''', employees_data)
+
+# Insert salary data into salaries table
+salaries_data = [
+    (1, 50000, 2015),
+    (1, 52000, 2016),
+    (1, 54000, 2017),
+    (2, 60000, 2016),
+    (2, 62000, 2017),
+    (2, 64000, 2018),
+    (3, 45000, 2017),
+    (3, 47000, 2018),
+    (3, 49000, 2019),
+    (4, 75000, 2018),
+    (4, 77000, 2019),
+    (4, 79000, 2020),
+    (5, 52000, 2019),
+    (5, 53000, 2020),
+    (6, 70000, 2020)
+]
+cursor.executemany('''INSERT INTO salaries (employee_id, salary, year) VALUES (?, ?, ?)''', salaries_data)
+
+conn.commit()
+
+# Query 1: Aggregation - Average salary by department
+query1 = '''
+SELECT d.department_name, AVG(s.salary) as avg_salary
+FROM employees e
+JOIN salaries s ON e.employee_id = s.employee_id
+JOIN departments d ON e.department_id = d.department_id
+GROUP BY d.department_name
+'''
+df1 = pd.read_sql_query(query1, conn)
+print("Average Salary by Department:")
+print(df1)
+
+# Query 2: Join - Employee details with department names
+query2 = '''
+SELECT e.first_name, e.last_name, d.department_name
+FROM employees e
+JOIN departments d ON e.department_id = d.department_id
+'''
+df2 = pd.read_sql_query(query2, conn)
+print("\nEmployee Details with Department Names:")
+print(df2)
+
+# Query 3: Subquery - Employees who earn more than the department average
+query3 = '''
+SELECT e.first_name, e.last_name, s.salary, d.department_name
+FROM employees e
+JOIN salaries s ON e.employee_id = s.employee_id
+JOIN departments d ON e.department_id = d.department_id
+WHERE s.salary > (
+    SELECT AVG(s2.salary) 
+    FROM salaries s2
+    WHERE s2.employee_id = e.employee_id
+)
+'''
+df3 = pd.read_sql_query(query3, conn)
+print("\nEmployees Earning More than Department Average:")
+print(df3)
+
+# Query 4: Window function - Calculate running total of salaries by year for each employee
+query4 = '''
+SELECT e.first_name, e.last_name, s.year, s.salary,
+       SUM(s.salary) OVER (PARTITION BY e.employee_id ORDER BY s.year) AS running_total
+FROM employees e
+JOIN salaries s ON e.employee_id = s.employee_id
+'''
+df4 = pd.read_sql_query(query4, conn)
+print("\nRunning Total of Salaries by Year for Each Employee:")
+print(df4)
+
+# Close connection
+conn.close()
